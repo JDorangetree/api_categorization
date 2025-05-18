@@ -22,6 +22,7 @@ PROMPTS_FILE_PATH = os.path.join(BASE_DIR, 'data', 'prompts.json')
 
 # Carga las variables de entorno desde un archivo .env
 load_dotenv()
+
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
 
