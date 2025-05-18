@@ -16,9 +16,9 @@ from rapidfuzz import fuzz
 
 # --- Configuración de Paths ---
 # Obtiene la ruta del directorio donde está main.py
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.abspath(__name__))
 # Construye la ruta completa al archivo de prompts
-PROMPTS_FILE_PATH = os.path.join('data', 'prompts.json')
+PROMPTS_FILE_PATH = os.path.join(BASE_DIR, 'data', 'prompts.json')
 
 # Carga las variables de entorno desde un archivo .env
 load_dotenv()
