@@ -12,6 +12,18 @@ from azure.core import exceptions as azure_exceptions # Alias para evitar confli
 from google.api_core import exceptions as google_exceptions
 import asyncio
 from rapidfuzz import fuzz
+from fastapi.middleware.cors import CORSMiddleware
+
+
+origins = [
+    "http://localhost:8000",  # Ejemplo si tu frontend corre en localhost:8000
+    "http://localhost:3000",  # Ejemplo si usas React en localhost:3000
+    "http://127.0.0.1:8000",
+    "http://127.0.0.1:3000",
+    "null", # Permitir orígenes como file:// (para abrir el html directo), aunque no es seguro en prod.
+    # Agrega aquí los dominios de tu frontend en producción
+    # "https://tu-frontend.com",
+]
 
 
 # --- Configuración de Paths ---
@@ -71,6 +83,16 @@ app = FastAPI(
     " con Gemini" ,
     description="API para categorizar productos de consumo masivo bajo el arbol de categorías GPC de GS1 usando Gemini.",
     version="0.1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins, # Lista de orígenes permitidos
+    allow_credentials=True, # Permite cookies y credenciales (si las usas)
+    allow_methods=["*"],    # Permite todos los métodos (GET, POST, PUT, DELETE, etc.)
+    # O puedes especificar solo los que necesitas: allow_methods=["POST"]
+    allow_headers=["*"],    # Permite todas las cabeceras (Content-Type, Authorization, etc.)
+    # O puedes especificar solo las que necesitas: allow_headers=["Content-Type", "Accept"]
 )
 
 # --- Endpoint para Gemini (USA LA CLAVE GLOBAL Y PROMPTS CARGADOS) ---
