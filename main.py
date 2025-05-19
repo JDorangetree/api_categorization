@@ -22,7 +22,7 @@ origins = [
     "http://127.0.0.1:3000",
     "null", # Permitir orígenes como file:// (para abrir el html directo), aunque no es seguro en prod.
     # Agrega aquí los dominios de tu frontend en producción
-    # "https://tu-frontend.com",
+    "https://storagecategorization.z13.web.core.windows.net/"
 ]
 
 
