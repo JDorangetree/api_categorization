@@ -20,9 +20,9 @@ origins = [
     "http://localhost:3000",  # Ejemplo si usas React en localhost:3000
     "http://127.0.0.1:8000",
     "http://127.0.0.1:3000",
-    "null", # Permitir orígenes como file:// (para abrir el html directo), aunque no es seguro en prod.
-    # Agrega aquí los dominios de tu frontend en producción
-    "https://storagecategorization.z13.web.core.windows.net/"
+    "null",
+    "https://storagecategorization.z13.web.core.windows.net/",
+    "https://storagecategorization-secondary.z13.web.core.windows.net/"
 ]
 
 
