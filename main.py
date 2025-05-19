@@ -587,6 +587,154 @@ async def generate_description_and_segmented_classes(request: GeminiRequest):
            detail=f"Error al procesar la respuesta de Gemini: {e}"
        )
 
+#--- NUEVO Endpoint: Generar descripción concisa y luego escoge la familia de la GPC a la que corresponde ---
+@app.post("/generate-and-bricks/")
+async def generate_description_and_segmented_bricks(request: GeminiRequest):
+    """
+    Recibe descripción resumida, llama internamente a /generate/ para obtener texto de Gemini,
+    y luego categoriza a nivel de brick esa descripción.
+    """
+    # Llama a la función que maneja el endpoint /generate/.
+    # Esto ejecuta la lógica de llamar a Gemini.
+    # Captura cualquier HTTPException que pueda lanzar generate_text_with_gemini
+    instruction = LOADED_PROMPTS.get('gpc_categorization_brick')
+    final_prompt_text = instruction
+        
+    # Filtra por PartitionKey igual a 'CategoriaA'
+    # La sintaxis del filtro usa OData
+    table_name = "GPCbrick"
+    MAX_RETRIES = 3       # Número máximo de intentos (1 intento inicial + MAX_RETRIES-1 reintentos)
+    RETRY_DELAY_SECONDS = 2 # Tiempo de espera entre reintentos
+    response_from_gemini = None
+    generated_segment_id = None
+    success = False
+    
+    print(f"Intentando llamar a generate_and_segmented_description (hasta {MAX_RETRIES} intentos)...")
+
+    for attempt in range(MAX_RETRIES):
+        try:
+            print(f"  Intento {attempt + 1} de {MAX_RETRIES}...")
+            # Llama a tu función asíncrona
+            response_from_gemini = await generate_description_and_segmented_classes(request)
+
+            # --- Verificar el formato de la respuesta esperada ---
+            # Asegúrate de que la respuesta sea una lista, no esté vacía,
+            # que el primer elemento sea un diccionario, y que tenga la clave 'RowKey'.
+            if (isinstance(response_from_gemini, dict) and
+                'id_clase' in response_from_gemini):
+
+                success = True
+                print("  Llamada a Gemini exitosa y respuesta con formato esperado.")
+                break # Sal del bucle de reintentos
+
+            else:
+                # Si el formato no es el esperado pero no hubo excepción
+                print(f"  Intento {attempt + 1} fallido: Formato de respuesta inesperado de Gemini.")
+                # Puedes imprimir la respuesta recibida para depurar
+                # print(f"  Respuesta recibida: {response_from_gemini}")
+
+        # --- Manejo de excepciones ---
+        # Captura errores específicos de Google API si es posible
+        except google_exceptions.GoogleAPIError as e:
+            print(f"  Intento {attempt + 1} fallido: Error de Google API - {e}")
+        # Captura errores generales de conexión o HTTP
+        except (azure_exceptions.HttpResponseError, ConnectionError) as e:
+            print(f"  Intento {attempt + 1} fallido: Error de conexión o HTTP - {e}")
+        # Captura cualquier otra excepción inesperada
+        except Exception as e:
+            print(f"  Intento {attempt + 1} fallido: Error inesperado - {e}")
+
+        # Si no fue el último intento, espera antes de reintentar
+        if attempt < MAX_RETRIES - 1:
+            print(f"  Esperando {RETRY_DELAY_SECONDS} segundos antes de reintentar...")
+            await asyncio.sleep(RETRY_DELAY_SECONDS) # Usa asyncio.sleep en funciones async
+        else:
+            print(f"  Máximo número de reintentos ({MAX_RETRIES}) alcanzado.")
+
+
+    # --- Procesar después de los reintentos ---
+    if not success:
+        # Si el bucle terminó sin éxito, lanza una excepción
+        print("La llamada a generate_and_segmented_description falló después de varios intentos.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"No se pudo obtener una respuesta válida de Gemini después de {MAX_RETRIES} intentos."
+    )
+
+
+
+    
+    try:
+        list_of_entities = []
+        generated_clase_id = response_from_gemini['id_clase']
+        print(generated_clase_id)
+        filter_query_select = "id_clase eq '{}'".format(generated_clase_id)
+        table_client = TableClient.from_connection_string(
+        conn_str=connection_string,
+        table_name=table_name
+    )    
+        try:
+            entities = table_client.query_entities(query_filter=filter_query_select)
+            print(f"Entidades encontradas:")
+            count = 0
+            for entity in entities:
+                list_of_entities.append(entity)
+                #print(entity)
+                count += 1
+            print(f"Total de entidades encontradas: {count}")
+            df_bricks = pd.DataFrame(list_of_entities)
+            print(df_bricks)
+            bricks = df_bricks['Brick'].tolist()
+
+        except Exception as e:
+            print(f"Ocurrió un error al consultar por PartitionKey: {e}")
+    except Exception as e:
+        print(f"Ocurrió un error inesperado al conectar o inicializar: {e}")
+
+
+        
+    try:
+        generated_text = response_from_gemini['IA_description']
+        model = genai.GenerativeModel('gemini-2.5-flash-preview-04-17')
+
+        #print(f"Enviando prompt a Gemini:\n---\n{final_prompt_text}\n---") # Log para depuración
+        response = model.generate_content(final_prompt_text.format(
+            "\n- ".join(bricks),
+            "\n- ".join(generated_text))
+        )
+        
+        #Devuelve tanto el texto original generado como el interpretado
+        partes = response.text.split(':', 1)
+        if len(partes) > 1:
+            # Si hay dos partes, toma la segunda
+            brick = partes[1].lstrip()
+        else:
+            brick = str(partes[0])
+        response_from_gemini['brick'] = brick
+
+
+        brick = response_from_gemini['brick']
+        df_bricks['Similitud'] = df_bricks['Brick'].apply(lambda x: fuzz.ratio(brick, x))
+        df_fila_mas_similar = df_bricks.nlargest(1, 'Similitud')
+        id_brick = df_fila_mas_similar.iloc[0]['RowKey']
+        response_from_gemini["id_brick"] = id_brick
+
+        return response_from_gemini
+
+    except HTTPException as e:
+        #Si la llamada interna a generate_text_with_gemini lanzó un HTTPException,
+        #lo relanzamos para que FastAPI lo maneje y devuelva el error al cliente.
+        raise e
+    except Exception as e:
+        #Captura cualquier otro error que pudiera ocurrir *después* de la llamada a generate_text_with_gemini,
+        #o si la llamada interna falló de forma inesperada sin un HTTPException
+        print(f"Error durante la interpretación o llamada interna: {e}")
+        raise HTTPException(
+           status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+           detail=f"Error al procesar la respuesta de Gemini: {e}"
+       )
+
+
 
 # Endpoint raíz
 @app.get("/")
