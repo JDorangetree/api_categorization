@@ -21,8 +21,8 @@ origins = [
     "http://127.0.0.1:8000",
     "http://127.0.0.1:3000",
     "null",
-    "https://storagecategorization.z13.web.core.windows.net/",
-    "https://storagecategorization-secondary.z13.web.core.windows.net/"
+    "https://storagecategorization.z13.web.core.windows.net",
+    "https://storagecategorization-secondary.z13.web.core.windows.net"
 ]
 
 
